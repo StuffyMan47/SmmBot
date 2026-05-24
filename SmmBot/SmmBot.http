@@ -1,0 +1,6 @@
+@SmmBot_HostAddress = http://localhost:5286
+
+GET {{SmmBot_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
