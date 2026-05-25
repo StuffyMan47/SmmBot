@@ -74,7 +74,20 @@ public class TelegramBotService
                 if (userState.State == BotState.WaitingForPostMedia && userState.Data is long postId)
                 {
                     await _mediaUploadHandler.HandleMediaUploadAsync(update.Message, postId, cancellationToken);
-                    _stateCache.ClearState(chatId.Value);
+                    
+                    // We shouldn't clear state immediately if it's a media group, 
+                    // because multiple messages will come with the same MediaGroupId.
+                    if (string.IsNullOrEmpty(update.Message.MediaGroupId))
+                    {
+                        _stateCache.ClearState(chatId.Value);
+                    }
+                    else
+                    {
+                        // Set a timeout to clear the state or handle it via a background cleanup
+                        // For simplicity, we can let the user manually cancel or just keep it
+                        // but usually for media groups, we should wait until all are processed.
+                        // We will clear it when user sends a text message or clicks a button.
+                    }
                 }
             }
             else if (update.Type == UpdateType.CallbackQuery)
@@ -105,6 +118,19 @@ public class TelegramBotService
 
         if (userState.State != BotState.None)
         {
+            if (userState.State == BotState.WaitingForPostMedia)
+            {
+                if (text == "/cancel" || text.ToLower() == "отмена" || text == "Готово")
+                {
+                    _stateCache.ClearState(message.Chat.Id);
+                    await _botClient.SendTextMessageAsync(message.Chat.Id, "✅ Загрузка медиа завершена.", cancellationToken: cancellationToken);
+                }
+                else
+                {
+                    await _botClient.SendTextMessageAsync(message.Chat.Id, "Пожалуйста, отправьте фото или нажмите 'Отмена'/'Готово'.", cancellationToken: cancellationToken);
+                }
+                return;
+            }
             if (userState.State == BotState.WaitingForSystemPrompt || userState.State == BotState.WaitingForTargetChannel)
             {
                 await _settingsHandler.HandleStateInputAsync(message, userState, cancellationToken);
@@ -184,6 +210,7 @@ public class TelegramBotService
                                 ContentPlanId = planToUpdate.Id,
                                 Text = p.Text,
                                 ScheduledTime = scheduledTimeNormalized,
+                                MediaRecommendation = p.MediaRecommendation,
                                 Status = SmmBot.Core.Enums.PostStatus.WaitingForConfirmation
                             });
                         }
@@ -262,5 +289,6 @@ public class TelegramBotService
     {
         public string Text { get; set; } = string.Empty;
         public DateTimeOffset ScheduledTime { get; set; }
+        public string? MediaRecommendation { get; set; }
     }
 }

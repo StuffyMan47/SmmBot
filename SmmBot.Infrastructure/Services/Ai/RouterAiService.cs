@@ -33,7 +33,7 @@ public class RouterAiService : IAiService
         prompt += $"IMPORTANT DATE INFO: All generated 'scheduledTime' fields MUST be within the dates {targetWeekStart:yyyy-MM-dd} and {targetWeekEnd:yyyy-MM-dd}.\n";
         if (!string.IsNullOrEmpty(previousPlans)) prompt += $"Previous plans to avoid repetition:\n{previousPlans}\n";
         if (!string.IsNullOrEmpty(statistics)) prompt += $"Statistics to consider:\n{statistics}\n";
-        prompt += "Format the output strictly as a JSON array of objects, with each object containing 'text' (string) and 'scheduledTime' (string in ISO 8601 format) properties. Do not include any markdown formatting, backticks, or text outside the JSON array.\n";
+        prompt += "Format the output strictly as a JSON array of objects, with each object containing 'text' (string), 'scheduledTime' (string in ISO 8601 format), and 'mediaRecommendation' (string) properties. The 'mediaRecommendation' field should contain instructions on what kind of media (photo/video) should accompany this post, keeping it separate from the post 'text'. Do not include any markdown formatting, backticks, or text outside the JSON array.\n";
         prompt += "CRITICAL: Return ONLY the JSON array containing the actual social media posts. DO NOT include the general content plan overview, context, pillars, or recommendations in the JSON output. Each item in the JSON array must be a final, ready-to-publish post intended for the channel subscribers.";
 
         return await GetTextCompletionAsync(prompt, "qwen/qwen3.6-plus", cancellationToken) ?? "Failed to generate content plan.";

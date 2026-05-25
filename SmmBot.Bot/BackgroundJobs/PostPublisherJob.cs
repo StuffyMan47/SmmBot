@@ -66,6 +66,7 @@ public class PostPublisherJob
                         chatId: settings.TargetChannelId,
                         text: post.Text,
                         parseMode: ParseMode.Html,
+                        disableNotification:true,
                         cancellationToken: cancellationToken);
                         
                     post.TelegramMessageId = msg.MessageId.ToString();

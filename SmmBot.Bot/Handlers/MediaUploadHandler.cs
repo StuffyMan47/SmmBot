@@ -23,38 +23,29 @@ public class MediaUploadHandler
 
     public async Task HandleMediaUploadAsync(Telegram.Bot.Types.Message message, long postId, CancellationToken cancellationToken)
     {
-        string fileId;
-        MediaType mediaType;
+        if (message.Type != MessageType.Photo)
+        {
+            await _botClient.SendTextMessageAsync(message.Chat.Id, "❌ Ошибка: поддерживаются только изображения.", cancellationToken: cancellationToken);
+            return;
+        }
 
-        if (message.Type == MessageType.Photo)
-        {
-            fileId = message.Photo!.Last().FileId;
-            mediaType = MediaType.Photo;
-        }
-        else if (message.Type == MessageType.Video)
-        {
-            fileId = message.Video!.FileId;
-            mediaType = MediaType.Video;
-        }
-        else return;
+        string fileId = message.Photo!.Last().FileId;
 
         var file = await _botClient.GetFileAsync(fileId, cancellationToken);
         var fileStream = new MemoryStream();
         await _botClient.DownloadFileAsync(file.FilePath!, fileStream, cancellationToken);
         fileStream.Position = 0;
-
-        var extension = Path.GetExtension(file.FilePath) ?? ".jpg";
-        var fileName = $"{postId}{extension}";
-        var contentType = mediaType == MediaType.Photo ? "image/jpeg" : "video/mp4";
-
-        var url = await _s3Storage.UploadFileAsync(fileStream, fileName, contentType, cancellationToken);
+        
+        var bytes = fileStream.ToArray();
+        var base64 = Convert.ToBase64String(bytes);
+        var base64Url = $"data:image/jpeg;base64,{base64}";
 
         var mediaFile = new MediaFile
         {
             PostId = postId,
-            Type = mediaType,
-            FilePath = url,
-            FileId = fileId
+            Type = MediaType.Photo,
+            FilePath = base64Url,
+            FileId = null // FileId is not needed since we store base64 directly
         };
 
         _dbContext.MediaFiles.Add(mediaFile);
@@ -67,6 +58,6 @@ public class MediaUploadHandler
         
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        await _botClient.SendTextMessageAsync(message.Chat.Id, "✅ Медиафайл успешно загружен и прикреплен к посту.", cancellationToken: cancellationToken);
+        await _botClient.SendTextMessageAsync(message.Chat.Id, "✅ Изображение успешно загружено и прикреплено к посту в формате Base64.", cancellationToken: cancellationToken);
     }
 }

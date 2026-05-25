@@ -252,7 +252,8 @@ public class CurrentWeekHandler
 
         if (post == null) return;
 
-        var text = $"Редактирование поста\nДата: {post.ScheduledTime:dd.MM.yyyy HH:mm}\nСтатус: {post.Status}\n\nТекст:\n{post.Text}";
+        var mediaRec = string.IsNullOrEmpty(post.MediaRecommendation) ? "Отсутствует" : post.MediaRecommendation;
+        var text = $"Редактирование поста\nДата: {post.ScheduledTime:dd.MM.yyyy HH:mm}\nСтатус: {post.Status}\n\n📸 Медиа-рекомендация от ИИ:\n{mediaRec}\n\nТекст:\n{post.Text}";
 
         var inlineKeyboard = new InlineKeyboardMarkup(new[]
         {
@@ -358,7 +359,7 @@ public class CurrentWeekHandler
                 break;
             case "attach":
                 _stateCache.SetState(chatId, BotState.WaitingForPostMedia, postId);
-                await _botClient.SendTextMessageAsync(chatId, "Отправьте фото или видео для прикрепления к посту.", cancellationToken: cancellationToken);
+                await _botClient.SendTextMessageAsync(chatId, "Отправьте фото (можно несколько сразу) для прикрепления к посту. По завершении отправьте текст 'Готово'.", cancellationToken: cancellationToken);
                 break;
             case "confirm":
                 post.Status = PostStatus.Confirmed;

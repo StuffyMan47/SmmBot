@@ -7,6 +7,7 @@ public class Post : BaseEntity
 {
     public required long ContentPlanId { get; set; }
     public required string Text { get; set; }
+    public string? MediaRecommendation { get; set; }
     public DateTimeOffset ScheduledTime { get; set; }
     public PostStatus Status { get; set; } = PostStatus.WaitingForConfirmation;
     

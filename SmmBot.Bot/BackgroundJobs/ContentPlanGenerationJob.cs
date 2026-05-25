@@ -124,6 +124,7 @@ public class ContentPlanGenerationJob
                     ContentPlanId = contentPlan.Id,
                     Text = p.Text,
                     ScheduledTime = scheduledTimeNormalized,
+                    MediaRecommendation = p.MediaRecommendation,
                     Status = PostStatus.WaitingForConfirmation
                 });
             }
@@ -248,6 +249,7 @@ public class ContentPlanGenerationJob
                     ContentPlanId = contentPlan.Id,
                     Text = p.Text,
                     ScheduledTime = scheduledTimeNormalized,
+                    MediaRecommendation = p.MediaRecommendation,
                     Status = PostStatus.WaitingForConfirmation
                 });
             }
@@ -315,5 +317,6 @@ public class ContentPlanGenerationJob
     {
         public string Text { get; set; } = string.Empty;
         public DateTimeOffset ScheduledTime { get; set; }
+        public string? MediaRecommendation { get; set; }
     }
 }
