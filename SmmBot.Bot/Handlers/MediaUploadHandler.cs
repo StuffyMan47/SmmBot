@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using SmmBot.Infrastructure.DAL.DbContext;
 using Telegram.Bot;
 using Telegram.Bot.Types;
@@ -45,9 +46,14 @@ public class MediaUploadHandler
             PostId = postId,
             Type = MediaType.Photo,
             FilePath = base64Url,
-            FileId = null // FileId is not needed since we store base64 directly
+            FileId = fileId // FileId is not needed since we store base64 directly
         };
 
+        var existMedia = await _dbContext.MediaFiles.Where(x=>x.PostId == postId && x.FilePath == fileId).ToListAsync(cancellationToken);
+        if (existMedia.Any())
+        {
+            return;
+        }
         _dbContext.MediaFiles.Add(mediaFile);
         
         var post = await _dbContext.Posts.FindAsync(postId, cancellationToken);

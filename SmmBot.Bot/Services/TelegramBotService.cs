@@ -254,7 +254,7 @@ public class TelegramBotService
         {
             await _settingsHandler.HandleCallbackAsync(callbackQuery, cancellationToken);
         }
-        else if (data.StartsWith("edit_post_") || data.StartsWith("post_action_") || data == "view_all_current_week_posts" || data.StartsWith("back_to_plan_") || data == "generate_current_week_plan" || data == "regenerate_current_week_plan" || data == "confirm_current_week_plan")
+        else if (data.StartsWith("edit_post_") || data.StartsWith("post_action_") || data == "view_all_current_week_posts" || data.StartsWith("back_to_plan_") || data == "generate_current_week_plan" || data == "regenerate_current_week_plan" || data == "confirm_next_week_plan" || data == "confirm_current_week_plan")
         {
             await _currentWeekHandler.HandleCallbackAsync(callbackQuery, cancellationToken);
         }

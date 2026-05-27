@@ -226,18 +226,40 @@ public class CurrentWeekHandler
             _stateCache.SetState(chatId, BotState.WaitingForContentPlanChanges);
             await _botClient.SendTextMessageAsync(chatId, "Напишите, что нужно исправить в контент плане на эту неделю?", cancellationToken: cancellationToken);
         }
+        else if (data == "confirm_next_week_plan")
+        {
+            var now = DateTimeOffset.UtcNow;
+            var startOfWeek = now.AddDays(-(int)now.DayOfWeek + (int)DayOfWeek.Monday).AddDays(7).Date;
+            var startOfWeekUtc = new DateTimeOffset(startOfWeek, TimeSpan.Zero);
+            
+            var currentPlan = await _dbContext.ContentPlans.Include(p => p.Posts).FirstOrDefaultAsync(p => p.WeekStartDate == startOfWeekUtc, cancellationToken);
+            if (currentPlan != null)
+            {
+                currentPlan.IsConfirmed = true;
+                foreach (var post in currentPlan.Posts)
+                {
+                    post.Status = PostStatus.Confirmed;
+                }
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                await _botClient.SendTextMessageAsync(chatId, "✅ Контент план на следующую неделю подтвержден, все посты готовы к публикации.", cancellationToken: cancellationToken);
+            }
+        }
         else if (data == "confirm_current_week_plan")
         {
             var now = DateTimeOffset.UtcNow;
             var startOfWeek = now.AddDays(-(int)now.DayOfWeek + (int)DayOfWeek.Monday).Date;
             var startOfWeekUtc = new DateTimeOffset(startOfWeek, TimeSpan.Zero);
             
-            var currentPlan = await _dbContext.ContentPlans.FirstOrDefaultAsync(p => p.WeekStartDate == startOfWeekUtc, cancellationToken);
+            var currentPlan = await _dbContext.ContentPlans.Include(p => p.Posts).FirstOrDefaultAsync(p => p.WeekStartDate == startOfWeekUtc, cancellationToken);
             if (currentPlan != null)
             {
                 currentPlan.IsConfirmed = true;
+                foreach (var post in currentPlan.Posts)
+                {
+                    post.Status = PostStatus.Confirmed;
+                }
                 await _dbContext.SaveChangesAsync(cancellationToken);
-                await _botClient.SendTextMessageAsync(chatId, "✅ Контент план на текущую неделю подтвержден.", cancellationToken: cancellationToken);
+                await _botClient.SendTextMessageAsync(chatId, "✅ Контент план на текущую неделю подтвержден, все посты готовы к публикации.", cancellationToken: cancellationToken);
             }
         }
 

@@ -6,6 +6,7 @@ using SmmBot.Bot.States;
 using SmmBot.Bot.BackgroundJobs;
 using Hangfire;
 using SmmBot.Infrastructure.DAL.Entites;
+using SmmBot.Core.Enums;
 
 namespace SmmBot.Bot.Handlers;
 
@@ -37,14 +38,19 @@ public class NextWeekCallbackHandler
         else if (data == "confirm_next_week_plan")
         {
             var now = DateTimeOffset.UtcNow;
-            var startOfWeek = now.AddDays(-(int)now.DayOfWeek + (int)DayOfWeek.Monday).AddDays(7).Date;
+            var startOfNextWeek = now.AddDays(-(int)now.DayOfWeek + (int)DayOfWeek.Monday).AddDays(7).Date;
+            var startOfNextWeekUtc = new DateTimeOffset(startOfNextWeek, TimeSpan.Zero);
             
-            var nextPlan = await _dbContext.ContentPlans.FirstOrDefaultAsync(p => p.WeekStartDate == startOfWeek, cancellationToken);
+            var nextPlan = await _dbContext.ContentPlans.Include(p => p.Posts).FirstOrDefaultAsync(p => p.WeekStartDate == startOfNextWeekUtc, cancellationToken);
             if (nextPlan != null)
             {
                 nextPlan.IsConfirmed = true;
+                foreach (var post in nextPlan.Posts)
+                {
+                    post.Status = PostStatus.Confirmed;
+                }
                 await _dbContext.SaveChangesAsync(cancellationToken);
-                await _botClient.SendTextMessageAsync(chatId, "✅ Контент план на следующую неделю подтвержден.", cancellationToken: cancellationToken);
+                await _botClient.SendTextMessageAsync(chatId, "✅ Контент план на следующую неделю подтвержден, все посты готовы к публикации.", cancellationToken: cancellationToken);
             }
         }
         else if (data == "view_all_next_week_posts")
