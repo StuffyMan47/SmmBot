@@ -1,8 +1,9 @@
+using Amazon.Runtime;
+using Amazon.S3;
+using Amazon.S3.Model;
+using Amazon.S3.Util;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Minio;
-using Minio.DataModel.Args;
-using Minio.Exceptions;
 using SmmBot.Core.Interfaces.Settings.Models;
 using SmmBot.Core.Interfaces.Storage;
 
@@ -10,7 +11,7 @@ namespace SmmBot.Infrastructure.Services.Storage;
 
 public class S3StorageService : IS3StorageService
 {
-    private readonly IMinioClient _minioClient;
+    private readonly IAmazonS3 _s3Client;
     private readonly S3StorageSettings _settings;
     private readonly ILogger<S3StorageService> _logger;
 
@@ -19,38 +20,55 @@ public class S3StorageService : IS3StorageService
         _settings = settings.Value;
         _logger = logger;
         
-        _minioClient = new MinioClient()
-            .WithEndpoint(_settings.Endpoint)
-            .WithCredentials(_settings.AccessKey, _settings.SecretKey)
-            .Build();
+        var config = new AmazonS3Config
+        {
+            ServiceURL = _settings.Endpoint,
+            ForcePathStyle = true,
+            AuthenticationRegion = "us-east-1" // SeaweedFS often expects a region
+        };
+
+        if (string.IsNullOrEmpty(_settings.AccessKey) || _settings.AccessKey == "some_access_key")
+        {
+            // Use anonymous credentials if no access key is provided, 
+            // since SeaweedFS without explicit authentication configured will reject signed requests.
+            _s3Client = new AmazonS3Client(new AnonymousAWSCredentials(), config);
+        }
+        else
+        {
+            _s3Client = new AmazonS3Client(new BasicAWSCredentials(_settings.AccessKey, _settings.SecretKey), config);
+        }
     }
 
     public async Task<string> UploadFileAsync(Stream fileStream, string fileName, string contentType, CancellationToken cancellationToken = default)
     {
         try
         {
-            var bucketExistsArgs = new BucketExistsArgs().WithBucket(_settings.BucketName);
-            bool found = await _minioClient.BucketExistsAsync(bucketExistsArgs, cancellationToken);
-            if (!found)
+            bool bucketExists = await AmazonS3Util.DoesS3BucketExistV2Async(_s3Client, _settings.BucketName);
+            if (!bucketExists)
             {
-                var makeBucketArgs = new MakeBucketArgs().WithBucket(_settings.BucketName);
-                await _minioClient.MakeBucketAsync(makeBucketArgs, cancellationToken);
+                var putBucketRequest = new PutBucketRequest
+                {
+                    BucketName = _settings.BucketName,
+                    UseClientRegion = true
+                };
+                await _s3Client.PutBucketAsync(putBucketRequest, cancellationToken);
             }
 
             string objectName = $"{Guid.NewGuid()}_{fileName}";
 
-            var putObjectArgs = new PutObjectArgs()
-                .WithBucket(_settings.BucketName)
-                .WithObject(objectName)
-                .WithStreamData(fileStream)
-                .WithObjectSize(fileStream.Length)
-                .WithContentType(contentType);
+            var putRequest = new PutObjectRequest
+            {
+                BucketName = _settings.BucketName,
+                Key = objectName,
+                InputStream = fileStream,
+                ContentType = contentType
+            };
 
-            await _minioClient.PutObjectAsync(putObjectArgs, cancellationToken);
+            await _s3Client.PutObjectAsync(putRequest, cancellationToken);
 
             return $"{_settings.Endpoint}/{_settings.BucketName}/{objectName}";
         }
-        catch (MinioException e)
+        catch (AmazonS3Exception e)
         {
             _logger.LogError(e, "Error occurred during file upload to S3.");
             throw;
@@ -62,21 +80,20 @@ public class S3StorageService : IS3StorageService
         try
         {
             string objectName = ExtractObjectNameFromUrl(fileUrl);
+
+            var getRequest = new GetObjectRequest
+            {
+                BucketName = _settings.BucketName,
+                Key = objectName
+            };
+
+            using var response = await _s3Client.GetObjectAsync(getRequest, cancellationToken);
             var memoryStream = new MemoryStream();
-
-            var getObjectArgs = new GetObjectArgs()
-                .WithBucket(_settings.BucketName)
-                .WithObject(objectName)
-                .WithCallbackStream((stream) =>
-                {
-                    stream.CopyTo(memoryStream);
-                });
-
-            await _minioClient.GetObjectAsync(getObjectArgs, cancellationToken);
+            await response.ResponseStream.CopyToAsync(memoryStream, cancellationToken);
             memoryStream.Position = 0;
             return memoryStream;
         }
-        catch (MinioException e)
+        catch (AmazonS3Exception e)
         {
             _logger.LogError(e, $"Error occurred during file download from S3: {fileUrl}");
             return null;
@@ -88,13 +105,16 @@ public class S3StorageService : IS3StorageService
         try
         {
             string objectName = ExtractObjectNameFromUrl(fileUrl);
-            var removeObjectArgs = new RemoveObjectArgs()
-                .WithBucket(_settings.BucketName)
-                .WithObject(objectName);
+            
+            var deleteRequest = new DeleteObjectRequest
+            {
+                BucketName = _settings.BucketName,
+                Key = objectName
+            };
 
-            await _minioClient.RemoveObjectAsync(removeObjectArgs, cancellationToken);
+            await _s3Client.DeleteObjectAsync(deleteRequest, cancellationToken);
         }
-        catch (MinioException e)
+        catch (AmazonS3Exception e)
         {
             _logger.LogError(e, $"Error occurred during file deletion from S3: {fileUrl}");
         }

@@ -49,7 +49,7 @@ public static class HangfireConfiguration
         recurringJobManager.AddOrUpdate<PostPublisherJob>(
             "post-publisher",
             job => job.PublishPendingPostsAsync(CancellationToken.None),
-            "0 * * * *"
+            "1 * * * *"
         );
 
         // Statistics collector: Every hour (Cron: "0 * * * *")
