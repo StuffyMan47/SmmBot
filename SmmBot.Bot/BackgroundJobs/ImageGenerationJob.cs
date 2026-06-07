@@ -40,7 +40,7 @@ public class ImageGenerationJob
 
         try
         {
-            var imagePrompt = await _aiService.GenerateImagePromptAsync(post.Text, cancellationToken);
+            var imagePrompt = await _aiService.GenerateImagePromptAsync(post.MediaRecommendation ?? post.Text, cancellationToken);
             var imageUrl = await _aiService.GenerateImageAsync(imagePrompt, cancellationToken);
 
             if (!string.IsNullOrEmpty(imageUrl))
@@ -49,7 +49,7 @@ public class ImageGenerationJob
                 {
                     PostId = postId,
                     Type = MediaType.Photo,
-                    FilePath = imageUrl,
+                    FilePath = imageUrl, // Already a base64 string from AI service
                     FileId = null
                 };
 
@@ -77,11 +77,6 @@ public class ImageGenerationJob
                     {
                         _logger.LogWarning(ex, "Could not send notification to admin {AdminId}", adminId);
                     }
-                }
-                // Notify admins
-                if (_logger.IsEnabled(LogLevel.Information))
-                {
-                    // send notification to admins
                 }
             }
         }

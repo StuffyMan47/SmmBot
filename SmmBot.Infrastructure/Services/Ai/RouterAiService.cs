@@ -53,6 +53,7 @@ public class RouterAiService : IAiService
 
     public async Task<string?> GenerateImageAsync(string prompt, CancellationToken cancellationToken = default)
     {
+        prompt += "Don't combine photos into one. Be sure to send as many photos as indicated in the prompt.";
         var contentItems = new List<object>
         {
             new { type = "text", text = prompt }
@@ -97,6 +98,7 @@ public class RouterAiService : IAiService
             var response = await _httpClient.PostAsJsonAsync("chat/completions", requestBody, cancellationToken);
             response.EnsureSuccessStatusCode();
             
+            var test  = await response.Content.ReadAsStringAsync();
             var result = await response.Content.ReadFromJsonAsync<ChatCompletionResponse>(cancellationToken: cancellationToken);
             return result?.Choices?.FirstOrDefault()?.Message?.Images?.FirstOrDefault()?.ImageUrl?.Url;
         }

@@ -45,19 +45,71 @@ public class PostPublisherJob
             {
                 if (post.MediaFiles.Any())
                 {
-                    // Logic to upload media - simplified for text only for now or single photo
-                    var media = post.MediaFiles.First();
-                    if (media.Type == MediaType.Photo)
+                    if (post.MediaFiles.Count == 1)
                     {
-                        var inputFile = !string.IsNullOrEmpty(media.FileId) ? InputFile.FromFileId(media.FileId) : SmmBot.Bot.Extensions.MediaHelper.GetInputFile(media.FilePath!);
-                        var msg = await _botClient.SendPhotoAsync(
+                        var media = post.MediaFiles.First();
+                        if (media.Type == MediaType.Photo)
+                        {
+                            var inputFile = !string.IsNullOrEmpty(media.FileId) ? (InputFile)InputFile.FromFileId(media.FileId) : (InputFile)SmmBot.Bot.Extensions.MediaHelper.GetInputFile(media.FilePath!);
+                            var msg = await _botClient.SendPhotoAsync(
+                                chatId: settings.TargetChannelId,
+                                photo: inputFile,
+                                caption: post.Text,
+                                parseMode: ParseMode.Html,
+                                disableNotification:true,
+                                cancellationToken: cancellationToken);
+                            
+                            post.TelegramMessageId = msg.MessageId.ToString();
+                        }
+                        else if (media.Type == MediaType.Video)
+                        {
+                            var inputFile = !string.IsNullOrEmpty(media.FileId) ? (InputFile)InputFile.FromFileId(media.FileId) : (InputFile)InputFile.FromUri(media.FilePath!);
+                            var msg = await _botClient.SendVideoAsync(
+                                chatId: settings.TargetChannelId,
+                                video: inputFile,
+                                caption: post.Text,
+                                parseMode: ParseMode.Html,
+                                disableNotification: true,
+                                cancellationToken: cancellationToken);
+                            
+                            post.TelegramMessageId = msg.MessageId.ToString();
+                        }
+                    }
+                    else
+                    {
+                        var mediaGroup = new List<IAlbumInputMedia>();
+                        foreach (var media in post.MediaFiles)
+                        {
+                            if (media.Type == MediaType.Photo)
+                            {
+                                var inputFile = !string.IsNullOrEmpty(media.FileId) ? (InputFile)InputFile.FromFileId(media.FileId) : (InputFile)SmmBot.Bot.Extensions.MediaHelper.GetInputFile(media.FilePath!);
+                                var inputMedia = new InputMediaPhoto(inputFile);
+                                if (mediaGroup.Count == 0 && !string.IsNullOrEmpty(post.Text))
+                                {
+                                    inputMedia.Caption = post.Text;
+                                    inputMedia.ParseMode = ParseMode.Html;
+                                }
+                                mediaGroup.Add(inputMedia);
+                            }
+                            else if (media.Type == MediaType.Video)
+                            {
+                                var inputFile = !string.IsNullOrEmpty(media.FileId) ? (InputFile)InputFile.FromFileId(media.FileId) : (InputFile)InputFile.FromUri(media.FilePath!);
+                                var inputMedia = new InputMediaVideo(inputFile);
+                                if (mediaGroup.Count == 0 && !string.IsNullOrEmpty(post.Text))
+                                {
+                                    inputMedia.Caption = post.Text;
+                                    inputMedia.ParseMode = ParseMode.Html;
+                                }
+                                mediaGroup.Add(inputMedia);
+                            }
+                        }
+
+                        var msgs = await _botClient.SendMediaGroupAsync(
                             chatId: settings.TargetChannelId,
-                            photo: inputFile,
-                            caption: post.Text,
-                            parseMode: ParseMode.Html,
+                            media: mediaGroup,
                             cancellationToken: cancellationToken);
-                        
-                        post.TelegramMessageId = msg.MessageId.ToString();
+                            
+                        post.TelegramMessageId = msgs[0].MessageId.ToString();
                     }
                 }
                 else
