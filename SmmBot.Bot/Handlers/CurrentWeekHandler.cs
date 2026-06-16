@@ -296,20 +296,28 @@ public class CurrentWeekHandler
         var mediaRec = string.IsNullOrEmpty(post.MediaRecommendation) ? "Отсутствует" : post.MediaRecommendation;
         var text = $"Редактирование поста\nДата: {post.ScheduledTime:dd.MM.yyyy HH:mm}\nСтатус: {post.Status}\n\n📸 Медиа-рекомендация от ИИ:\n{mediaRec}\n\nТекст:\n{post.Text}";
 
-        var inlineKeyboard = new InlineKeyboardMarkup(new[]
+        var buttons = new List<InlineKeyboardButton[]>
         {
             new[] { InlineKeyboardButton.WithCallbackData("Изменить дату и время", $"post_action_time_{postId}") },
             new[] { InlineKeyboardButton.WithCallbackData("Изменить текст", $"post_action_text_{postId}") },
             new[] { InlineKeyboardButton.WithCallbackData("🔄 Перегенерировать пост", $"post_action_regen_{postId}") },
             new[] { InlineKeyboardButton.WithCallbackData("Сгенерировать медиа (ИИ)", $"post_action_genmedia_{postId}") },
-            new[] { InlineKeyboardButton.WithCallbackData("Прикрепить медиа", $"post_action_attach_{postId}") },
-            new[] 
-            { 
-                InlineKeyboardButton.WithCallbackData("✅ Подтвердить", $"post_action_confirm_{postId}"),
-                InlineKeyboardButton.WithCallbackData("❌ Удалить", $"post_action_delete_{postId}")
-            },
-            new[] { InlineKeyboardButton.WithCallbackData("🔙 Назад к плану", $"back_to_plan_{postId}") }
+            new[] { InlineKeyboardButton.WithCallbackData("Прикрепить медиа", $"post_action_attach_{postId}") }
+        };
+
+        if (post.MediaFiles.Any())
+        {
+            buttons.Add(new[] { InlineKeyboardButton.WithCallbackData("🗑 Удалить медиафайлы", $"post_action_delmedia_{postId}") });
+        }
+
+        buttons.Add(new[] 
+        { 
+            InlineKeyboardButton.WithCallbackData("✅ Подтвердить", $"post_action_confirm_{postId}"),
+            InlineKeyboardButton.WithCallbackData("❌ Удалить", $"post_action_delete_{postId}")
         });
+        buttons.Add(new[] { InlineKeyboardButton.WithCallbackData("🔙 Назад к плану", $"back_to_plan_{postId}") });
+
+        var inlineKeyboard = new InlineKeyboardMarkup(buttons);
 
         if (post.MediaFiles.Any())
         {
@@ -406,6 +414,16 @@ public class CurrentWeekHandler
             case "attach":
                 _stateCache.SetState(chatId, BotState.WaitingForPostMedia, postId);
                 await _botClient.SendTextMessageAsync(chatId, "Отправьте фото (можно несколько сразу) для прикрепления к посту. По завершении отправьте текст 'Готово'.", cancellationToken: cancellationToken);
+                break;
+            case "delmedia":
+                var postWithMedia = await _dbContext.Posts.Include(p => p.MediaFiles).FirstOrDefaultAsync(p => p.Id == postId, cancellationToken);
+                if (postWithMedia != null && postWithMedia.MediaFiles.Any())
+                {
+                    _dbContext.MediaFiles.RemoveRange(postWithMedia.MediaFiles);
+                    await _dbContext.SaveChangesAsync(cancellationToken);
+                    await _botClient.SendTextMessageAsync(chatId, "🗑 Медиафайлы удалены.", cancellationToken: cancellationToken);
+                    await ShowPostEditMenuAsync(chatId, postId, cancellationToken);
+                }
                 break;
             case "confirm":
                 post.Status = PostStatus.Confirmed;
