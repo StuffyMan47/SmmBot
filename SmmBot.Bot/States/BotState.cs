@@ -8,5 +8,6 @@ public enum BotState
     WaitingForContentPlanChanges = 3,
     WaitingForPostTextEdit = 4,
     WaitingForPostTimeEdit = 5,
-    WaitingForPostMedia = 6
+    WaitingForPostMedia = 6,
+    WaitingForPostRegenerationChanges = 7
 }

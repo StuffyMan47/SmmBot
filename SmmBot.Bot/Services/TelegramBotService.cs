@@ -168,6 +168,39 @@ public class TelegramBotService
                 }
                 return;
             }
+            if (userState.State == BotState.WaitingForPostRegenerationChanges && userState.Data is long postIdRegen)
+            {
+                await _botClient.SendTextMessageAsync(message.Chat.Id, "Перегенерация поста с учетом ваших правок...", cancellationToken: cancellationToken);
+                var post = await _dbContext.Posts.FindAsync(postIdRegen, cancellationToken);
+                if (post != null)
+                {
+                    var updatedJson = await _aiService.EditContentPlanAsync(
+                        $"[{{\"Text\": \"{post.Text.Replace("\"", "\\\"")}\", \"ScheduledTime\": \"{post.ScheduledTime:O}\", \"MediaRecommendation\": \"{post.MediaRecommendation?.Replace("\"", "\\\"")}\"}}]", 
+                        message.Text, 
+                        cancellationToken);
+                    
+                    var parsedPosts = ParseAiResponse(updatedJson);
+                    var regeneratedPost = parsedPosts.FirstOrDefault();
+                    
+                    if (regeneratedPost != null)
+                    {
+                        post.Text = regeneratedPost.Text;
+                        if (!string.IsNullOrEmpty(regeneratedPost.MediaRecommendation))
+                        {
+                            post.MediaRecommendation = regeneratedPost.MediaRecommendation;
+                        }
+                        post.Status = SmmBot.Core.Enums.PostStatus.WaitingForConfirmation;
+                        await _dbContext.SaveChangesAsync(cancellationToken);
+                        await _botClient.SendTextMessageAsync(message.Chat.Id, "✅ Пост перегенерирован.", cancellationToken: cancellationToken);
+                    }
+                    else
+                    {
+                        await _botClient.SendTextMessageAsync(message.Chat.Id, "❌ Не удалось перегенерировать пост. AI вернул неверный формат.", cancellationToken: cancellationToken);
+                    }
+                }
+                _stateCache.ClearState(message.Chat.Id);
+                return;
+            }
             if (userState.State == BotState.WaitingForContentPlanChanges)
             {
                 await _botClient.SendTextMessageAsync(message.Chat.Id, "Генерация нового плана с учетом ваших правок...", cancellationToken: cancellationToken);

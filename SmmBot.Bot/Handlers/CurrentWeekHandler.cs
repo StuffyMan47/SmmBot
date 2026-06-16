@@ -300,6 +300,7 @@ public class CurrentWeekHandler
         {
             new[] { InlineKeyboardButton.WithCallbackData("Изменить дату и время", $"post_action_time_{postId}") },
             new[] { InlineKeyboardButton.WithCallbackData("Изменить текст", $"post_action_text_{postId}") },
+            new[] { InlineKeyboardButton.WithCallbackData("🔄 Перегенерировать пост", $"post_action_regen_{postId}") },
             new[] { InlineKeyboardButton.WithCallbackData("Сгенерировать медиа (ИИ)", $"post_action_genmedia_{postId}") },
             new[] { InlineKeyboardButton.WithCallbackData("Прикрепить медиа", $"post_action_attach_{postId}") },
             new[] 
@@ -393,6 +394,10 @@ public class CurrentWeekHandler
             case "text":
                 _stateCache.SetState(chatId, BotState.WaitingForPostTextEdit, postId);
                 await _botClient.SendTextMessageAsync(chatId, "Отправьте новый текст поста.", cancellationToken: cancellationToken);
+                break;
+            case "regen":
+                _stateCache.SetState(chatId, BotState.WaitingForPostRegenerationChanges, postId);
+                await _botClient.SendTextMessageAsync(chatId, "Напишите, что нужно исправить в этом посте?", cancellationToken: cancellationToken);
                 break;
             case "genmedia":
                 await _botClient.SendTextMessageAsync(chatId, "Генерация медиа запущена...", cancellationToken: cancellationToken);
