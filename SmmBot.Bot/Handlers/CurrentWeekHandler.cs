@@ -213,6 +213,25 @@ public class CurrentWeekHandler
                 {
                     await ShowContentPlanAsync(callbackQuery.Message!, post.ContentPlan, cancellationToken);
                 }
+                else
+                {
+                    // Fallback to finding current week's plan if post is deleted
+                    var now = DateTimeOffset.UtcNow;
+                    var startOfWeek = now.AddDays(-(int)now.DayOfWeek + (int)DayOfWeek.Monday).Date;
+                    var endOfWeek = startOfWeek.AddDays(7).AddTicks(-1);
+                    
+                    var startOfWeekUtc = new DateTimeOffset(startOfWeek, TimeSpan.Zero);
+                    var endOfWeekUtc = new DateTimeOffset(endOfWeek, TimeSpan.Zero);
+                    
+                    var currentPlan = await _dbContext.ContentPlans
+                        .Include(p => p.Posts)
+                        .FirstOrDefaultAsync(p => p.WeekStartDate >= startOfWeekUtc && p.WeekEndDate <= endOfWeekUtc, cancellationToken);
+
+                    if (currentPlan != null)
+                    {
+                        await ShowContentPlanAsync(callbackQuery.Message!, currentPlan, cancellationToken);
+                    }
+                }
             }
         }
 
@@ -389,9 +408,26 @@ public class CurrentWeekHandler
                 await _botClient.SendTextMessageAsync(chatId, "✅ Пост подтвержден и будет опубликован в назначенное время.", cancellationToken: cancellationToken);
                 break;
             case "delete":
+                var confirmDeleteKeyboard = new InlineKeyboardMarkup(new[]
+                {
+                    new[]
+                    {
+                        InlineKeyboardButton.WithCallbackData("🗑 Да, удалить", $"post_action_confirmdelete_{postId}"),
+                        InlineKeyboardButton.WithCallbackData("Отменить", $"edit_post_{postId}")
+                    }
+                });
+                await _botClient.SendTextMessageAsync(chatId, "Вы уверены, что хотите удалить этот пост?", replyMarkup: confirmDeleteKeyboard, cancellationToken: cancellationToken);
+                break;
+            case "confirmdelete":
                 _dbContext.Posts.Remove(post);
                 await _dbContext.SaveChangesAsync(cancellationToken);
-                await _botClient.SendTextMessageAsync(chatId, "🗑 Пост удален.", cancellationToken: cancellationToken);
+                
+                var backToPlanKeyboard = new InlineKeyboardMarkup(new[]
+                {
+                    // Sending a dummy postId for deleted post to fallback to current week plan
+                    new[] { InlineKeyboardButton.WithCallbackData("🔙 Назад к плану", $"back_to_plan_{post.Id}") } 
+                });
+                await _botClient.SendTextMessageAsync(chatId, "🗑 Пост удален.", replyMarkup: backToPlanKeyboard, cancellationToken: cancellationToken);
                 break;
         }
     }
