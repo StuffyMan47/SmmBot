@@ -430,6 +430,11 @@ public class CurrentWeekHandler
                 await _dbContext.SaveChangesAsync(cancellationToken);
                 await _botClient.SendTextMessageAsync(chatId, "✅ Пост подтвержден и будет опубликован в назначенное время.", cancellationToken: cancellationToken);
                 break;
+            case "cancel":
+                post.Status = PostStatus.WaitingForConfirmation;
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                await _botClient.SendTextMessageAsync(chatId, "❌ Публикация поста отменена. Статус изменен на 'Ожидает подтверждения'.", cancellationToken: cancellationToken);
+                break;
             case "delete":
                 var confirmDeleteKeyboard = new InlineKeyboardMarkup(new[]
                 {

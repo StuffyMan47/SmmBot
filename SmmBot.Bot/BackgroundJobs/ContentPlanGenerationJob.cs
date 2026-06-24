@@ -119,17 +119,24 @@ public class ContentPlanGenerationJob
                 var scheduledTimeUtc = p.ScheduledTime.ToUniversalTime();
                 var scheduledTimeNormalized = new DateTimeOffset(scheduledTimeUtc.DateTime, TimeSpan.Zero);
 
-                contentPlan.Posts.Add(new Post
+                var newPost = new Post
                 {
                     ContentPlanId = contentPlan.Id,
                     Text = p.Text,
                     ScheduledTime = scheduledTimeNormalized,
                     MediaRecommendation = p.MediaRecommendation,
                     Status = PostStatus.WaitingForConfirmation
-                });
+                };
+
+                contentPlan.Posts.Add(newPost);
             }
 
             await _dbContext.SaveChangesAsync(cancellationToken);
+
+            foreach (var post in contentPlan.Posts)
+            {
+                BackgroundJob.Enqueue<ImageGenerationJob>(x => x.GenerateImageForPostAsync(post.Id, CancellationToken.None));
+            }
 
             _logger.LogInformation("Successfully generated content plan for current week.");
             
@@ -244,17 +251,24 @@ public class ContentPlanGenerationJob
                 var scheduledTimeUtc = p.ScheduledTime.ToUniversalTime();
                 var scheduledTimeNormalized = new DateTimeOffset(scheduledTimeUtc.DateTime, TimeSpan.Zero);
 
-                contentPlan.Posts.Add(new Post
+                var newPost = new Post
                 {
                     ContentPlanId = contentPlan.Id,
                     Text = p.Text,
                     ScheduledTime = scheduledTimeNormalized,
                     MediaRecommendation = p.MediaRecommendation,
                     Status = PostStatus.WaitingForConfirmation
-                });
+                };
+
+                contentPlan.Posts.Add(newPost);
             }
 
             await _dbContext.SaveChangesAsync(cancellationToken);
+
+            foreach (var post in contentPlan.Posts)
+            {
+                BackgroundJob.Enqueue<ImageGenerationJob>(x => x.GenerateImageForPostAsync(post.Id, CancellationToken.None));
+            }
 
             // Optional: Notify admins that plan is ready
             _logger.LogInformation("Successfully generated content plan for next week.");

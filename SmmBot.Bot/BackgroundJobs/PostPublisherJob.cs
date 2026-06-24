@@ -36,7 +36,7 @@ public class PostPublisherJob
 
         var postsToPublish = await _dbContext.Posts
             .Include(p => p.MediaFiles)
-            .Where(p => p.Status == PostStatus.Confirmed && p.ScheduledTime <= now)
+            .Where(p => (p.Status == PostStatus.Confirmed) && p.ScheduledTime <= now)
             .ToListAsync(cancellationToken);
 
         foreach (var post in postsToPublish)
