@@ -111,10 +111,60 @@ public class RouterAiService : IAiService
 
     public async Task<string?> GenerateVideoAsync(string prompt, CancellationToken cancellationToken = default)
     {
-        // RouterAI / standard providers usually don't support direct video generation through simple unified API yet.
-        // Returning null or a mock URL for now, or you'd integrate with a specific provider like Runway / Sora.
-        _logger.LogWarning("Video generation is not natively supported by the generic AI endpoint yet.");
-        return null;
+        var requestBody = new
+        {
+            model = "x-ai/grok-imagine-video",
+            prompt = prompt,
+            aspect_ratio = "16:9",
+            duration = 7,
+            resolution = "480p"
+        };
+
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync("videos", requestBody, cancellationToken);
+            response.EnsureSuccessStatusCode();
+            
+            var createResult = await response.Content.ReadFromJsonAsync<VideoCreateResponse>(cancellationToken: cancellationToken);
+            if (createResult == null || string.IsNullOrEmpty(createResult.Id))
+            {
+                _logger.LogError("Failed to extract video ID from RouterAI response.");
+                return null;
+            }
+
+            string videoId = createResult.Id;
+            string status = createResult.Status;
+            VideoStatusResponse? statusResult = null;
+
+            while (status == "pending" || status == "in_progress")
+            {
+                await Task.Delay(5000, cancellationToken); // Wait 5 seconds before polling
+                
+                var statusResponse = await _httpClient.GetAsync($"videos/{videoId}", cancellationToken);
+                statusResponse.EnsureSuccessStatusCode();
+                
+                statusResult = await statusResponse.Content.ReadFromJsonAsync<VideoStatusResponse>(cancellationToken: cancellationToken);
+                if (statusResult != null)
+                {
+                    status = statusResult.Status;
+                }
+            }
+
+            if (status == "completed" && statusResult?.UnsignedUrls != null && statusResult.UnsignedUrls.Any())
+            {
+                return statusResult.UnsignedUrls.First();
+            }
+            else
+            {
+                _logger.LogError("Video generation failed or timed out. Final status: {Status}", status);
+                return null;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to generate video from RouterAI.");
+            return null;
+        }
     }
 
     private async Task<string?> GetTextCompletionAsync(string prompt, string model, CancellationToken cancellationToken)
@@ -193,4 +243,31 @@ public class ImageData
 {
     [JsonPropertyName("url")]
     public string Url { get; set; } = string.Empty;
+}
+
+public class VideoCreateResponse
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = string.Empty;
+
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = string.Empty;
+    
+    [JsonPropertyName("polling_url")]
+    public string PollingUrl { get; set; } = string.Empty;
+}
+
+public class VideoStatusResponse
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = string.Empty;
+
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = string.Empty;
+    
+    [JsonPropertyName("polling_url")]
+    public string PollingUrl { get; set; } = string.Empty;
+
+    [JsonPropertyName("unsigned_urls")]
+    public List<string> UnsignedUrls { get; set; } = new();
 }

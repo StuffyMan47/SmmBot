@@ -6,6 +6,7 @@ namespace SmmBot.Bot.Extensions;
 public static class MediaHelper
 {
     private static readonly Regex DataUriRegex = new Regex(@"^data:(?<mime>[\w/\-\.]+);(?<encoding>\w+),(?<data>.*)", RegexOptions.Compiled);
+    private static readonly HttpClient _httpClient = new HttpClient();
 
     public static InputFile GetInputFile(string filePathOrBase64, string fileName = "image.png")
     {
@@ -27,6 +28,13 @@ public static class MediaHelper
         }
         else if (filePathOrBase64.StartsWith("http://") || filePathOrBase64.StartsWith("https://"))
         {
+            if (fileName.EndsWith(".mp4"))
+            {
+                // Telegram might fail downloading videos via HTTP URL directly from SeaweedFS (WEBPAGE_MEDIA_EMPTY)
+                // We fetch the stream and send it to avoid URL validation issues
+                var stream = _httpClient.GetStreamAsync(filePathOrBase64).GetAwaiter().GetResult();
+                return InputFile.FromStream(stream, fileName);
+            }
             return InputFile.FromUri(filePathOrBase64);
         }
 

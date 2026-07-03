@@ -5,32 +5,37 @@ using Microsoft.Extensions.Options;
 using SmmBot.Infrastructure.DAL.DbContext;
 using Telegram.Bot;
 using Telegram.Bot.Types.ReplyMarkups;
-using Telegram.Bot.Types;
 using SmmBot.Core.Enums;
 using SmmBot.Core.Interfaces.Ai;
 using SmmBot.Core.Interfaces.Settings.Models;
 using SmmBot.Infrastructure.DAL.Entites;
+using SmmBot.Core.Interfaces.Storage;
+using System.Net.Http;
 
 namespace SmmBot.Bot.BackgroundJobs;
 
-public class ImageGenerationJob
+public class VideoGenerationJob
 {
     private readonly AppDbContext _dbContext;
-    private readonly ILogger<ImageGenerationJob> _logger;
+    private readonly ILogger<VideoGenerationJob> _logger;
     private readonly ITelegramBotClient _botClient;
     private readonly IAiService _aiService;
     private readonly BotConfiguration _config;
+    private readonly IS3StorageService _s3StorageService;
+    private readonly HttpClient _httpClient;
 
-    public ImageGenerationJob(AppDbContext dbContext, ILogger<ImageGenerationJob> logger, ITelegramBotClient botClient, IAiService aiService, IOptions<BotConfiguration> config)
+    public VideoGenerationJob(AppDbContext dbContext, ILogger<VideoGenerationJob> logger, ITelegramBotClient botClient, IAiService aiService, IOptions<BotConfiguration> config, IS3StorageService s3StorageService, HttpClient httpClient)
     {
         _dbContext = dbContext;
         _logger = logger;
         _botClient = botClient;
         _aiService = aiService;
         _config = config.Value;
+        _s3StorageService = s3StorageService;
+        _httpClient = httpClient;
     }
 
-    public async Task GenerateImageForPostAsync(long postId, CancellationToken cancellationToken = default)
+    public async Task GenerateVideoForPostAsync(long postId, CancellationToken cancellationToken = default)
     {
         var post = await _dbContext.Posts.Include(p => p.ContentPlan).FirstOrDefaultAsync(p => p.Id == postId, cancellationToken);
         if (post == null) return;
@@ -40,25 +45,24 @@ public class ImageGenerationJob
 
         try
         {
-            var isVideo = post.MediaRecommendation?.Contains("видео", StringComparison.OrdinalIgnoreCase) == true || 
-                          post.MediaRecommendation?.Contains("video", StringComparison.OrdinalIgnoreCase) == true;
+            var videoUrl = await _aiService.GenerateVideoAsync(post.MediaRecommendation ?? post.Text, cancellationToken);
 
-            if (isVideo)
+            if (!string.IsNullOrEmpty(videoUrl))
             {
-                BackgroundJob.Enqueue<VideoGenerationJob>(x => x.GenerateVideoForPostAsync(postId, CancellationToken.None));
-                return;
-            }
+                var request = new HttpRequestMessage(HttpMethod.Get, videoUrl);
+                request.Headers.Add("Authorization", $"Bearer {_config.AiToken}"); // Added auth header
+                var response = await _httpClient.SendAsync(request, cancellationToken);
+                response.EnsureSuccessStatusCode();
+                var videoStream = await response.Content.ReadAsStreamAsync(cancellationToken);
 
-            var imagePrompt = await _aiService.GenerateImagePromptAsync(post.MediaRecommendation ?? post.Text, cancellationToken);
-            var imageUrl = await _aiService.GenerateImageAsync(imagePrompt, cancellationToken);
+                var fileName = $"video_post_{post.Id}.mp4";
+                var s3Url = await _s3StorageService.UploadFileAsync(videoStream, fileName, "video/mp4", cancellationToken);
 
-            if (!string.IsNullOrEmpty(imageUrl))
-            {
                 var mediaFile = new MediaFile
                 {
                     PostId = postId,
-                    Type = MediaType.Photo,
-                    FilePath = imageUrl, // Already a base64 string from AI service
+                    Type = MediaType.Video,
+                    FilePath = s3Url, // s3Url is stored, ensuring we reference SeaweedFS, not original AI API URL
                     FileId = null
                 };
 
@@ -78,7 +82,7 @@ public class ImageGenerationJob
 
                         await _botClient.SendTextMessageAsync(
                             chatId: adminId, 
-                            text: $"✅ Изображение для поста на {post.ScheduledTime:dd.MM.yyyy HH:mm} сгенерировано.", 
+                            text: $"✅ Видео для поста на {post.ScheduledTime:dd.MM.yyyy HH:mm} сгенерировано.", 
                             replyMarkup: inlineKeyboard,
                             cancellationToken: cancellationToken);
                     }
@@ -93,10 +97,10 @@ public class ImageGenerationJob
         {
             foreach (var adminId in _config.AdminIds)
             {
-                await _botClient.SendTextMessageAsync(adminId, $"Ошибка в процессе генерации изображения: {ex.Message}",
+                await _botClient.SendTextMessageAsync(adminId, $"Ошибка в процессе генерации видео: {ex.Message}",
                     cancellationToken: cancellationToken);
             }
-            _logger.LogError(ex, "Failed to generate image for post {PostId}", postId);
+            _logger.LogError(ex, "Failed to generate video for post {PostId}", postId);
         }
     }
 }

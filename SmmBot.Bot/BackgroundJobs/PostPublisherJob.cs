@@ -63,7 +63,7 @@ public class PostPublisherJob
                         }
                         else if (media.Type == MediaType.Video)
                         {
-                            var inputFile = !string.IsNullOrEmpty(media.FileId) ? (InputFile)InputFile.FromFileId(media.FileId) : (InputFile)InputFile.FromUri(media.FilePath!);
+                            var inputFile = !string.IsNullOrEmpty(media.FileId) ? (InputFile)InputFile.FromFileId(media.FileId) : (InputFile)SmmBot.Bot.Extensions.MediaHelper.GetInputFile(media.FilePath!, "video.mp4");
                             var msg = await _botClient.SendVideoAsync(
                                 chatId: settings.TargetChannelId,
                                 video: inputFile,
@@ -93,7 +93,7 @@ public class PostPublisherJob
                             }
                             else if (media.Type == MediaType.Video)
                             {
-                                var inputFile = !string.IsNullOrEmpty(media.FileId) ? (InputFile)InputFile.FromFileId(media.FileId) : (InputFile)InputFile.FromUri(media.FilePath!);
+                                var inputFile = !string.IsNullOrEmpty(media.FileId) ? (InputFile)InputFile.FromFileId(media.FileId) : (InputFile)SmmBot.Bot.Extensions.MediaHelper.GetInputFile(media.FilePath!, "video.mp4");
                                 var inputMedia = new InputMediaVideo(inputFile);
                                 if (mediaGroup.Count == 0 && !string.IsNullOrEmpty(post.Text))
                                 {

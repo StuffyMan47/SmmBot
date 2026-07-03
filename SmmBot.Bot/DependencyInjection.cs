@@ -36,7 +36,8 @@ public static class DependencyInjection
         services.AddScoped<PostVerificationJob>();
         services.AddScoped<StatisticsCollectorJob>();
         services.AddScoped<ImageGenerationJob>();
-
+        services.AddScoped<VideoGenerationJob>();
+        
         return services;
     }
 }
