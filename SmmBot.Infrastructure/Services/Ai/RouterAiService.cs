@@ -67,7 +67,7 @@ public class RouterAiService : IAiService
         }
         if (Directory.Exists(referencesPath))
         {
-            var files = Directory.GetFiles(referencesPath, "*.webp");
+            var files = Directory.GetFiles(referencesPath, "*");
             foreach (var file in files)
             {
                 var bytes = await File.ReadAllBytesAsync(file, cancellationToken);
@@ -111,8 +111,38 @@ public class RouterAiService : IAiService
 
     public async Task<string?> GenerateVideoAsync(string prompt, CancellationToken cancellationToken = default)
     {
+        var contentItems = new List<object>
+        {
+            new { type = "text", text = prompt }
+        };
+        var referencesPath = Path.Combine(Directory.GetCurrentDirectory(), "PhotoReferences");
+        if (!Directory.Exists(referencesPath))
+        {
+            // Fallback to project root if running from bin
+            referencesPath = Path.Combine(Directory.GetCurrentDirectory(), "..", "SmmBot.Infrastructure", "PhotoReferences");
+        }
+        
+        if (Directory.Exists(referencesPath))
+        {
+            var files = Directory.GetFiles(referencesPath, "*");
+            foreach (var file in files)
+            {
+                var bytes = await File.ReadAllBytesAsync(file, cancellationToken);
+                var base64 = Convert.ToBase64String(bytes);
+                contentItems.Add(new
+                {
+                    type = "image_url",
+                    image_url = new { url = $"data:image/webp;base64,{base64}" }
+                });
+            }
+        }
+        
         var requestBody = new
         {
+            messages = new[]
+            {
+                new { role = "user", content = contentItems }
+            },
             model = "x-ai/grok-imagine-video",
             prompt = prompt,
             aspect_ratio = "16:9",
