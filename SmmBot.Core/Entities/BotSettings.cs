@@ -6,4 +6,5 @@ public class BotSettings : BaseEntity
 {
     public string? SystemPrompt { get; set; }
     public string? TargetChannelId { get; set; }
+    public string? TargetMaxChannelId { get; set; }
 }

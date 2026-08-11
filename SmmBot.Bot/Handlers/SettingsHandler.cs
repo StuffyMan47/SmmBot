@@ -27,11 +27,13 @@ public class SettingsHandler
         
         var systemPromptStatus = string.IsNullOrEmpty(settings?.SystemPrompt) ? "Не задан" : "Задан";
         var channelStatus = string.IsNullOrEmpty(settings?.TargetChannelId) ? "Не задан" : settings.TargetChannelId;
+        var maxChannelStatus = string.IsNullOrEmpty(settings?.TargetMaxChannelId) ? "Не задан" : settings.TargetMaxChannelId;
 
         var inlineKeyboard = new InlineKeyboardMarkup(new[]
         {
             new[] { InlineKeyboardButton.WithCallbackData($"Системный промпт ({systemPromptStatus})", "settings_system_prompt") },
-            new[] { InlineKeyboardButton.WithCallbackData($"Канал для публикации ({channelStatus})", "settings_target_channel") }
+            new[] { InlineKeyboardButton.WithCallbackData($"Канал для публикации ({channelStatus})", "settings_target_channel") },
+            new[] { InlineKeyboardButton.WithCallbackData($"Канал Max ({maxChannelStatus})", "settings_target_max_channel") }
         });
 
         await _botClient.SendTextMessageAsync(
@@ -70,6 +72,18 @@ public class SettingsHandler
             _stateCache.SetState(chatId, BotState.WaitingForTargetChannel);
             await _botClient.SendTextMessageAsync(chatId, text, cancellationToken: cancellationToken);
         }
+        else if (callbackQuery.Data == "settings_target_max_channel")
+        {
+            var settings = await _dbContext.BotSettings.FirstOrDefaultAsync(cancellationToken);
+            var text = "📢 Отправьте ID канала Max, куда бот будет выкладывать посты.";
+            if (!string.IsNullOrEmpty(settings?.TargetMaxChannelId))
+            {
+                text = $"Текущий канал Max: {settings.TargetMaxChannelId}\n\nОтправьте новый ID канала Max.";
+            }
+
+            _stateCache.SetState(chatId, BotState.WaitingForTargetMaxChannel);
+            await _botClient.SendTextMessageAsync(chatId, text, cancellationToken: cancellationToken);
+        }
 
         await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, cancellationToken: cancellationToken);
     }
@@ -92,6 +106,11 @@ public class SettingsHandler
         {
             settings.TargetChannelId = message.Text;
             await _botClient.SendTextMessageAsync(message.Chat.Id, "✅ Канал для публикации успешно сохранен. Убедитесь, что бот добавлен в этот канал как администратор.", cancellationToken: cancellationToken);
+        }
+        else if (userState.State == BotState.WaitingForTargetMaxChannel)
+        {
+            settings.TargetMaxChannelId = message.Text;
+            await _botClient.SendTextMessageAsync(message.Chat.Id, "✅ Канал Max для публикации успешно сохранен.", cancellationToken: cancellationToken);
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);

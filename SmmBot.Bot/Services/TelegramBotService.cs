@@ -131,7 +131,7 @@ public class TelegramBotService
                 }
                 return;
             }
-            if (userState.State == BotState.WaitingForSystemPrompt || userState.State == BotState.WaitingForTargetChannel)
+            if (userState.State == BotState.WaitingForSystemPrompt || userState.State == BotState.WaitingForTargetChannel || userState.State == BotState.WaitingForTargetMaxChannel)
             {
                 await _settingsHandler.HandleStateInputAsync(message, userState, cancellationToken);
                 return;

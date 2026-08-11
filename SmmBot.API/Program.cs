@@ -4,7 +4,9 @@ using Microsoft.EntityFrameworkCore;
 using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types.Enums;
-
+using Hangfire;
+using Max.Bot;
+using Max.Bot.Polling;
 using SmmBot.Bot;
 
 try
@@ -36,6 +38,42 @@ try
 
     var botClient = scope.ServiceProvider.GetRequiredService<ITelegramBotClient>();
     var botService = scope.ServiceProvider.GetRequiredService<SmmBot.Bot.Services.TelegramBotService>();
+    
+    var maxClient = app.Services.GetRequiredService<MaxClient>();
+    // var maxBotService = app.Services.GetRequiredService<MaxBotService>();
+    var logger = app.Services.GetRequiredService<ILogger<Program>>();
+
+    var maxHandler = new DelegatingUpdateHandler(
+        onMessage: async (updateContext, ct) =>
+        {
+            try
+            {
+                // updateContext.Update содержит данные события от Max API
+                // await maxBotService.HandleUpdateAsync(updateContext.Update, ct);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error handling Max bot update");
+            }
+        }
+    );
+
+// Запускаем polling в фоновой задаче
+    using var maxCts = new CancellationTokenSource();
+    _ = Task.Run(async () =>
+    {
+        try
+        {
+            logger.LogInformation("Starting Max bot in polling mode...");
+            // Стартуем опрос сервера Max
+            await maxClient.StartPollingAsync(maxHandler, cancellationToken: maxCts.Token);
+        }
+        catch (Exception ex)
+        {
+            logger.LogCritical(ex, "Max bot polling crashed");
+        }
+    }, maxCts.Token);
+
     
     var receiverOptions = new ReceiverOptions
     {
@@ -89,6 +127,8 @@ try
     app.UseHttpsRedirection();
     app.UseAuthorization();
     app.MapControllers();
+    
+    app.UseHangfireDashboard();
 
     await app.RunAsync();
 }

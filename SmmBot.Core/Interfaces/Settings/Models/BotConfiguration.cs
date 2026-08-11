@@ -4,6 +4,8 @@ public class BotConfiguration
 {
     public required string Token { get; init; }
     public required string WebhookUrl { get; init; }
+    
+    public required string MaxToken { get; init; }
     public required string AiToken { get; init; }
     public required string SiteUrl { get; init; }
     public required string SiteToken { get; init; }

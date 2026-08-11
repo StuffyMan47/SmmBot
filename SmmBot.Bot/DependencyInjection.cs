@@ -1,3 +1,5 @@
+using Max.Bot;
+using Max.Bot.Configuration;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SmmBot.Bot.Handlers;
@@ -17,6 +19,16 @@ public static class DependencyInjection
         {
             var token = configuration["BotConfiguration:Token"]!;
             return new TelegramBotClient(token);
+        });
+        
+        var maxBotToken = configuration.GetSection("BotConfiguration").GetSection("MaxToken");
+        services.AddSingleton<MaxClient>(provider =>
+        {
+            return new MaxClient(new MaxBotOptions
+            {
+                Token = maxBotToken.Value,
+                // BaseUrl = "https://platform-api2.max.ru/"
+            });
         });
 
         services.AddSingleton<UserStateCache>();
