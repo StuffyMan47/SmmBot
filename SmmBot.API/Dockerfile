@@ -24,5 +24,28 @@ RUN dotnet publish --no-restore "SmmBot.API.csproj" -c $BUILD_CONFIGURATION -o /
 
 FROM base AS final
 WORKDIR /app
+
+# ==========================================
+# НАЧАЛО: Установка доверенных сертификатов
+# ==========================================
+USER root
+
+# Копируем все 5 сертификатов в системную папку доверенных сертификатов
+COPY SmmBot.API/Certs/russian_trusted_root_ca_gost_2025_pem.crt /usr/local/share/ca-certificates/russian_trusted_root_ca_gost_2025_pem.crt
+COPY SmmBot.API/Certs/russian_trusted_root_ca_pem.crt /usr/local/share/ca-certificates/russian_trusted_root_ca_pem.crt
+COPY SmmBot.API/Certs/russian_trusted_sub_ca_2024_pem.crt /usr/local/share/ca-certificates/russian_trusted_sub_ca_2024_pem.crt
+COPY SmmBot.API/Certs/russian_trusted_sub_ca_gost_2025_pem.crt /usr/local/share/ca-certificates/russian_trusted_sub_ca_gost_2025_pem.crt
+COPY SmmBot.API/Certs/russian_trusted_sub_ca_pem.crt /usr/local/share/ca-certificates/russian_trusted_sub_ca_pem.crt
+
+# Обновляем хранилище сертификатов (создаст хеши в /etc/ssl/certs/)
+RUN update-ca-certificates
+
+# Возвращаем безопасного пользователя для запуска приложения
+USER $APP_UID
+# ==========================================
+# КОНЕЦ: Установка доверенных сертификатов
+# ==========================================
+
+
 COPY --from=publish /app/publish .
 ENTRYPOINT ["dotnet", "SmmBot.API.dll"]
