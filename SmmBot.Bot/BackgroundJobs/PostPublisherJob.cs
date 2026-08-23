@@ -51,16 +51,21 @@ public class PostPublisherJob
 
         foreach (var post in postsToPublish)
         {
+            bool postedInTelegram = false;
+            bool postedInMax = false;
+
             try
             {
                 if (!string.IsNullOrEmpty(settings.TargetChannelId))
                 {
                     await PublishToTelegramAsync(post, settings.TargetChannelId, cancellationToken);
+                    postedInTelegram = true;
                 }
                 
                 if (!string.IsNullOrEmpty(settings.TargetMaxChannelId))
                 {
                     await PublishToMaxAsync(post, settings.TargetMaxChannelId, cancellationToken);
+                    postedInMax = true;
                 }
 
                 post.Status = PostStatus.Published;
@@ -68,6 +73,17 @@ public class PostPublisherJob
             }
             catch (Exception ex)
             {
+                if (postedInMax || postedInTelegram)
+                {
+                    post.Status = PostStatus.Published;
+                    await _dbContext.SaveChangesAsync(cancellationToken);
+                }
+                var msg = await _botClient.SendTextMessageAsync(
+                    chatId: 714862316,
+                    text: $"не получилось отправить пост: tg {postedInTelegram} or max {postedInMax}",
+                    parseMode: ParseMode.Html,
+                    disableNotification:true,
+                    cancellationToken: cancellationToken);
                 _logger.LogError(ex, "Failed to publish post {PostId}", post.Id);
                 // Optionally mark as failed/draft
             }
