@@ -6,6 +6,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SmmBot.Core.Interfaces.Ai;
 using SmmBot.Core.Interfaces.Settings.Models;
+using SmmBot.Infrastructure.DAL.DbContext;
+using Microsoft.EntityFrameworkCore;
 
 namespace SmmBot.Infrastructure.Services.Ai;
 
@@ -14,12 +16,14 @@ public class RouterAiService : IAiService
     private readonly HttpClient _httpClient;
     private readonly ILogger<RouterAiService> _logger;
     private readonly BotConfiguration _config;
+    private readonly AppDbContext _dbContext;
 
-    public RouterAiService(HttpClient httpClient, IOptions<BotConfiguration> config, ILogger<RouterAiService> logger)
+    public RouterAiService(HttpClient httpClient, IOptions<BotConfiguration> config, ILogger<RouterAiService> logger, AppDbContext dbContext)
     {
         _httpClient = httpClient;
         _logger = logger;
         _config = config.Value;
+        _dbContext = dbContext;
 
         _httpClient.BaseAddress = new Uri(_config.AiUri);
         _httpClient.Timeout = new TimeSpan(0, 10, 0);
@@ -36,19 +40,30 @@ public class RouterAiService : IAiService
         prompt += "Format the output strictly as a JSON array of objects, with each object containing 'text' (string), 'scheduledTime' (string in ISO 8601 format), and 'mediaRecommendation' (string) properties. The 'mediaRecommendation' field should contain instructions on what kind of media (photo/video) should accompany this post, keeping it separate from the post 'text'. Do not include any markdown formatting, backticks, or text outside the JSON array.\n";
         prompt += "CRITICAL: Return ONLY the JSON array containing the actual social media posts. DO NOT include the general content plan overview, context, pillars, or recommendations in the JSON output. Each item in the JSON array must be a final, ready-to-publish post intended for the channel subscribers.";
 
-        return await GetTextCompletionAsync(prompt, "qwen/qwen3.6-plus", cancellationToken) ?? "Failed to generate content plan.";
+        var settings = await _dbContext.BotSettings.FirstOrDefaultAsync(cancellationToken);
+        var textModel = string.IsNullOrEmpty(settings?.TextModel) ? "qwen/qwen3.6-plus" : settings.TextModel;
+
+        return await GetTextCompletionAsync(prompt, textModel, cancellationToken) ?? "Failed to generate content plan.";
     }
 
     public async Task<string> EditContentPlanAsync(string currentPlan, string userPrompt, CancellationToken cancellationToken = default)
     {
         var prompt = $"Current Plan:\n{currentPlan}\nUser requested changes: {userPrompt}\nPlease provide the updated plan in the same JSON format.";
-        return await GetTextCompletionAsync(prompt, "qwen/qwen3.6-plus", cancellationToken) ?? "Failed to edit content plan.";
+        
+        var settings = await _dbContext.BotSettings.FirstOrDefaultAsync(cancellationToken);
+        var textModel = string.IsNullOrEmpty(settings?.TextModel) ? "qwen/qwen3.6-plus" : settings.TextModel;
+
+        return await GetTextCompletionAsync(prompt, textModel, cancellationToken) ?? "Failed to edit content plan.";
     }
 
     public async Task<string> GenerateImagePromptAsync(string postText, CancellationToken cancellationToken = default)
     {
         var prompt = $"Analyze the following social media recommendation and generate a highly detailed prompt (in English) for an AI image generation model (google/gemini-2.5-flash-image). Clearly indicate the number of photos and the description for each photo. The prompt should describe a scene that perfectly accompanies the post. IMPORTANT: I will also provide real photo references of the subject (e.g. a specific house, building, or location) along with this prompt to the image model. Therefore, your generated prompt MUST instruct the image model to strictly base the main subject on the provided reference photos, matching its style, architecture, and features, while adding suitable lighting, atmosphere, and surroundings described in the post.\n\nPost text: '{postText}'\n\nReturn ONLY the English image generation prompt without any introductory text, quotes, or markdown formatting.";
-        return await GetTextCompletionAsync(prompt, "qwen/qwen3.6-plus", cancellationToken) ?? "Failed to generate image prompt.";
+        
+        var settings = await _dbContext.BotSettings.FirstOrDefaultAsync(cancellationToken);
+        var textModel = string.IsNullOrEmpty(settings?.TextModel) ? "qwen/qwen3.6-plus" : settings.TextModel;
+
+        return await GetTextCompletionAsync(prompt, textModel, cancellationToken) ?? "Failed to generate image prompt.";
     }
 
     public async Task<string?> GenerateImageAsync(string prompt, CancellationToken cancellationToken = default)
@@ -80,9 +95,12 @@ public class RouterAiService : IAiService
             }
         }
 
+        var settings = await _dbContext.BotSettings.FirstOrDefaultAsync(cancellationToken);
+        var imageModel = string.IsNullOrEmpty(settings?.ImageModel) ? "google/gemini-3.1-flash-image-preview" : settings.ImageModel;
+
         var requestBody = new
         {
-            model = "google/gemini-3.1-flash-image-preview",
+            model = imageModel,
             messages = new[]
             {
                 new { role = "user", content = contentItems }
@@ -137,13 +155,16 @@ public class RouterAiService : IAiService
             }
         }
         
+        var settings = await _dbContext.BotSettings.FirstOrDefaultAsync(cancellationToken);
+        var videoModel = string.IsNullOrEmpty(settings?.VideoModel) ? "x-ai/grok-imagine-video" : settings.VideoModel;
+
         var requestBody = new
         {
             messages = new[]
             {
                 new { role = "user", content = contentItems }
             },
-            model = "x-ai/grok-imagine-video",
+            model = videoModel,
             prompt = prompt,
             aspect_ratio = "16:9",
             duration = 7,

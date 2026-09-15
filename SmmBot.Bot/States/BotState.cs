@@ -10,5 +10,8 @@ public enum BotState
     WaitingForPostTimeEdit = 5,
     WaitingForPostMedia = 6,
     WaitingForPostRegenerationChanges = 7,
-    WaitingForTargetMaxChannel = 8
+    WaitingForTargetMaxChannel = 8,
+    WaitingForTextModel = 9,
+    WaitingForImageModel = 10,
+    WaitingForVideoModel = 11
 }

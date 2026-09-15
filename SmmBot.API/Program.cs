@@ -31,7 +31,7 @@ try
 
     using var scope = app.Services.CreateScope();
     await using var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    await dbContext.Database.MigrateAsync();
+    // await dbContext.Database.MigrateAsync();
 
     var commandService = scope.ServiceProvider.GetRequiredService<SmmBot.Bot.Services.Interfaces.IStartCommandService>();
     await commandService.SetCommandsAsync();

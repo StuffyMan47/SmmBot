@@ -23,21 +23,32 @@ public class SettingsHandler
 
     public async Task HandleSettingsMenuAsync(Message message, CancellationToken cancellationToken)
     {
+        await HandleSettingsMenuAsync(message.Chat.Id, cancellationToken);
+    }
+
+    public async Task HandleSettingsMenuAsync(long chatId, CancellationToken cancellationToken)
+    {
         var settings = await _dbContext.BotSettings.FirstOrDefaultAsync(cancellationToken);
         
         var systemPromptStatus = string.IsNullOrEmpty(settings?.SystemPrompt) ? "Не задан" : "Задан";
         var channelStatus = string.IsNullOrEmpty(settings?.TargetChannelId) ? "Не задан" : settings.TargetChannelId;
         var maxChannelStatus = string.IsNullOrEmpty(settings?.TargetMaxChannelId) ? "Не задан" : settings.TargetMaxChannelId;
+        var textModelStatus = string.IsNullOrEmpty(settings?.TextModel) ? "qwen/qwen3.6-plus" : settings.TextModel;
+        var imageModelStatus = string.IsNullOrEmpty(settings?.ImageModel) ? "google/gemini-3.1-flash-image-preview" : settings.ImageModel;
+        var videoModelStatus = string.IsNullOrEmpty(settings?.VideoModel) ? "x-ai/grok-imagine-video" : settings.VideoModel;
 
         var inlineKeyboard = new InlineKeyboardMarkup(new[]
         {
             new[] { InlineKeyboardButton.WithCallbackData($"Системный промпт ({systemPromptStatus})", "settings_system_prompt") },
             new[] { InlineKeyboardButton.WithCallbackData($"Канал для публикации ({channelStatus})", "settings_target_channel") },
-            new[] { InlineKeyboardButton.WithCallbackData($"Канал Max ({maxChannelStatus})", "settings_target_max_channel") }
+            new[] { InlineKeyboardButton.WithCallbackData($"Канал Max ({maxChannelStatus})", "settings_target_max_channel") },
+            new[] { InlineKeyboardButton.WithCallbackData($"Текстовая модель ({textModelStatus})", "settings_text_model") },
+            new[] { InlineKeyboardButton.WithCallbackData($"Фото модель ({imageModelStatus})", "settings_image_model") },
+            new[] { InlineKeyboardButton.WithCallbackData($"Видео модель ({videoModelStatus})", "settings_video_model") }
         });
 
         await _botClient.SendTextMessageAsync(
-            chatId: message.Chat.Id,
+            chatId: chatId,
             text: "⚙️ Настройки бота\nВыберите параметр для изменения:",
             replyMarkup: inlineKeyboard,
             cancellationToken: cancellationToken
@@ -48,7 +59,18 @@ public class SettingsHandler
     {
         var chatId = callbackQuery.Message!.Chat.Id;
 
-        if (callbackQuery.Data == "settings_system_prompt")
+        var cancelKeyboard = new InlineKeyboardMarkup(new[]
+        {
+            new[] { InlineKeyboardButton.WithCallbackData("❌ Отмена", "settings_cancel_input") }
+        });
+
+        if (callbackQuery.Data == "settings_cancel_input")
+        {
+            _stateCache.ClearState(chatId);
+            await _botClient.SendTextMessageAsync(chatId, "Ввод отменен.", cancellationToken: cancellationToken);
+            await HandleSettingsMenuAsync(chatId, cancellationToken);
+        }
+        else if (callbackQuery.Data == "settings_system_prompt")
         {
             var settings = await _dbContext.BotSettings.FirstOrDefaultAsync(cancellationToken);
             var text = "📝 Отправьте новый системный промпт.";
@@ -58,7 +80,7 @@ public class SettingsHandler
             }
 
             _stateCache.SetState(chatId, BotState.WaitingForSystemPrompt);
-            await _botClient.SendTextMessageAsync(chatId, text, cancellationToken: cancellationToken);
+            await _botClient.SendTextMessageAsync(chatId, text, replyMarkup: cancelKeyboard, cancellationToken: cancellationToken);
         }
         else if (callbackQuery.Data == "settings_target_channel")
         {
@@ -70,7 +92,7 @@ public class SettingsHandler
             }
 
             _stateCache.SetState(chatId, BotState.WaitingForTargetChannel);
-            await _botClient.SendTextMessageAsync(chatId, text, cancellationToken: cancellationToken);
+            await _botClient.SendTextMessageAsync(chatId, text, replyMarkup: cancelKeyboard, cancellationToken: cancellationToken);
         }
         else if (callbackQuery.Data == "settings_target_max_channel")
         {
@@ -82,7 +104,34 @@ public class SettingsHandler
             }
 
             _stateCache.SetState(chatId, BotState.WaitingForTargetMaxChannel);
-            await _botClient.SendTextMessageAsync(chatId, text, cancellationToken: cancellationToken);
+            await _botClient.SendTextMessageAsync(chatId, text, replyMarkup: cancelKeyboard, cancellationToken: cancellationToken);
+        }
+        else if (callbackQuery.Data == "settings_text_model")
+        {
+            var settings = await _dbContext.BotSettings.FirstOrDefaultAsync(cancellationToken);
+            var currentModel = string.IsNullOrEmpty(settings?.TextModel) ? "qwen/qwen3.6-plus" : settings.TextModel;
+            var text = $"🤖 Текущая текстовая модель: {currentModel}\n\nОтправьте название новой текстовой модели.";
+
+            _stateCache.SetState(chatId, BotState.WaitingForTextModel);
+            await _botClient.SendTextMessageAsync(chatId, text, replyMarkup: cancelKeyboard, cancellationToken: cancellationToken);
+        }
+        else if (callbackQuery.Data == "settings_image_model")
+        {
+            var settings = await _dbContext.BotSettings.FirstOrDefaultAsync(cancellationToken);
+            var currentModel = string.IsNullOrEmpty(settings?.ImageModel) ? "google/gemini-3.1-flash-image-preview" : settings.ImageModel;
+            var text = $"🖼 Текущая фото модель: {currentModel}\n\nОтправьте название новой фото модели.";
+
+            _stateCache.SetState(chatId, BotState.WaitingForImageModel);
+            await _botClient.SendTextMessageAsync(chatId, text, replyMarkup: cancelKeyboard, cancellationToken: cancellationToken);
+        }
+        else if (callbackQuery.Data == "settings_video_model")
+        {
+            var settings = await _dbContext.BotSettings.FirstOrDefaultAsync(cancellationToken);
+            var currentModel = string.IsNullOrEmpty(settings?.VideoModel) ? "x-ai/grok-imagine-video" : settings.VideoModel;
+            var text = $"🎥 Текущая видео модель: {currentModel}\n\nОтправьте название новой видео модели.";
+
+            _stateCache.SetState(chatId, BotState.WaitingForVideoModel);
+            await _botClient.SendTextMessageAsync(chatId, text, replyMarkup: cancelKeyboard, cancellationToken: cancellationToken);
         }
 
         await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, cancellationToken: cancellationToken);
@@ -111,6 +160,21 @@ public class SettingsHandler
         {
             settings.TargetMaxChannelId = message.Text;
             await _botClient.SendTextMessageAsync(message.Chat.Id, "✅ Канал Max для публикации успешно сохранен.", cancellationToken: cancellationToken);
+        }
+        else if (userState.State == BotState.WaitingForTextModel)
+        {
+            settings.TextModel = message.Text;
+            await _botClient.SendTextMessageAsync(message.Chat.Id, "✅ Текстовая модель успешно сохранена.", cancellationToken: cancellationToken);
+        }
+        else if (userState.State == BotState.WaitingForImageModel)
+        {
+            settings.ImageModel = message.Text;
+            await _botClient.SendTextMessageAsync(message.Chat.Id, "✅ Фото модель успешно сохранена.", cancellationToken: cancellationToken);
+        }
+        else if (userState.State == BotState.WaitingForVideoModel)
+        {
+            settings.VideoModel = message.Text;
+            await _botClient.SendTextMessageAsync(message.Chat.Id, "✅ Видео модель успешно сохранена.", cancellationToken: cancellationToken);
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
