@@ -87,6 +87,8 @@ try
         try
         {
             Console.WriteLine("Starting bot in polling mode...");
+            
+            await botClient.DeleteWebhookAsync(cancellationToken: cts.Token);
         
             await botClient.ReceiveAsync(
                 updateHandler: async (client, update, cancellationToken) =>
