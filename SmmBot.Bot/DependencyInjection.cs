@@ -1,3 +1,4 @@
+using System.Net;
 using Max.Bot;
 using Max.Bot.Configuration;
 using Microsoft.Extensions.Configuration;
@@ -18,7 +19,7 @@ public static class DependencyInjection
         services.AddSingleton<ITelegramBotClient>(sp =>
         {
             var token = configuration["BotConfiguration:Token"]!;
-            return new TelegramBotClient(token);
+            return CreateTelegramBotClient(token, configuration);
         });
         
         var maxBotToken = configuration.GetSection("BotConfiguration").GetSection("MaxToken");
@@ -51,5 +52,36 @@ public static class DependencyInjection
         services.AddScoped<VideoGenerationJob>();
         
         return services;
+    }
+
+    private static TelegramBotClient CreateTelegramBotClient(string token, IConfiguration configuration)
+    {
+        var proxyUrl = configuration["BotConfiguration:TelegramProxyUrl"];
+
+        var clientOptions = new TelegramBotClientOptions(token);
+
+        if (string.IsNullOrWhiteSpace(proxyUrl))
+        {
+            return new TelegramBotClient(clientOptions);
+        }
+
+        // КРИТИЧЕСКИ ВАЖНО: BypassProxyOnLocal, чтобы запросы к PostgreSQL и другим локальным сервисам НЕ шли через прокси
+        var proxy = new WebProxy(proxyUrl)
+        {
+            BypassProxyOnLocal = true
+        };
+
+        var httpClientHandler = new HttpClientHandler
+        {
+            Proxy = proxy,
+            UseProxy = true
+        };
+
+        var httpClient = new HttpClient(httpClientHandler)
+        {
+            Timeout = TimeSpan.FromSeconds(360)
+        };
+
+        return new TelegramBotClient(clientOptions, httpClient);
     }
 }
