@@ -34,14 +34,21 @@ try
     // await dbContext.Database.MigrateAsync();
 
     var commandService = scope.ServiceProvider.GetRequiredService<SmmBot.Bot.Services.Interfaces.IStartCommandService>();
-    await commandService.SetCommandsAsync();
-
     var botClient = scope.ServiceProvider.GetRequiredService<ITelegramBotClient>();
     var botService = scope.ServiceProvider.GetRequiredService<SmmBot.Bot.Services.TelegramBotService>();
     
     var maxClient = app.Services.GetRequiredService<MaxClient>();
     // var maxBotService = app.Services.GetRequiredService<MaxBotService>();
     var logger = app.Services.GetRequiredService<ILogger<Program>>();
+
+    try
+    {
+        await commandService.SetCommandsAsync();
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to set Telegram bot commands at startup — continuing without them");
+    }
 
     var maxHandler = new DelegatingUpdateHandler(
         onMessage: async (updateContext, ct) =>
@@ -84,39 +91,54 @@ try
     
     _ = Task.Run(async () =>
     {
-        try
+        while (!cts.IsCancellationRequested)
         {
-            Console.WriteLine("Starting bot in polling mode...");
+            try
+            {
+                Console.WriteLine("Starting bot in polling mode...");
+                
+                await botClient.DeleteWebhookAsync(cancellationToken: cts.Token);
             
-            await botClient.DeleteWebhookAsync(cancellationToken: cts.Token);
-        
-            await botClient.ReceiveAsync(
-                updateHandler: async (client, update, cancellationToken) =>
-                {
-                    try
+                await botClient.ReceiveAsync(
+                    updateHandler: async (client, update, cancellationToken) =>
                     {
-                        using var innerScope = app.Services.CreateScope();
-                        var scopedBotService = innerScope.ServiceProvider.GetRequiredService<SmmBot.Bot.Services.TelegramBotService>();
-                        await scopedBotService.HandleUpdateAsync(update, cancellationToken);
-                    }
-                    catch (Exception ex)
+                        try
+                        {
+                            using var innerScope = app.Services.CreateScope();
+                            var scopedBotService = innerScope.ServiceProvider.GetRequiredService<SmmBot.Bot.Services.TelegramBotService>();
+                            await scopedBotService.HandleUpdateAsync(update, cancellationToken);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine("Error handling update: " + ex.Message);
+                        }
+                    },
+                    pollingErrorHandler: async (client, exception, cancellationToken) =>
                     {
-                        Console.WriteLine("Error handling update: " + ex.Message);
-                    }
-                },
-                pollingErrorHandler: async (client, exception, cancellationToken) =>
+                        Console.WriteLine("Polling error occurred: " + exception.Message);
+                        await Task.CompletedTask;
+                    },
+                    receiverOptions: receiverOptions,
+                    cancellationToken: cts.Token
+                );
+                break;
+            }
+            catch (OperationCanceledException) when (cts.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Bot polling failed: " + ex.Message + " — retrying in 15 seconds");
+                try
                 {
-                    Console.WriteLine("Polling error occurred: " + exception.Message);
-                    await Task.CompletedTask;
-                },
-                receiverOptions: receiverOptions,
-                cancellationToken: cts.Token
-            );
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine("Bot polling crashed: " + ex.Message);
-            cts.Cancel();
+                    await Task.Delay(TimeSpan.FromSeconds(15), cts.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+            }
         }
     });
 
